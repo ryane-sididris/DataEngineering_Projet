@@ -14,7 +14,7 @@ services:
 
   mongo:
     image: mongo:latest
-    container_name: football_db
+    container_name: pokedex_db
     ports:
       - "27017:27017"
     volumes:
