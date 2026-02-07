@@ -3,7 +3,7 @@ import pymongo
 import pandas as pd
 import scraper
 
-st.set_page_config(page_title="Pokedex Analytics", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="Pokedex Analytics", layout="wide")
 
 client = pymongo.MongoClient("mongodb://127.0.0.1:27017/")
 db = client["pokedex_db"]
@@ -11,8 +11,8 @@ collection = db["pokemons"]
 
 st.title("Pokedex Analytics")
 
-if st.button("🔄 Update Data"):
-    with st.spinner("Catching them all..."):
+if st.button("Update Data"):
+    with st.spinner("Loading..."):
         count = scraper.run_scraper()
     st.success(f"{count} Pokemon loaded!")
 
@@ -23,10 +23,12 @@ if data:
     
     st.sidebar.header("Filters")
     selected_type = st.sidebar.selectbox("Type", ["All"] + list(df["type"].unique()))
+    min_attack = st.sidebar.slider("Minimum Attack", 0, 150, 50)
     
     if selected_type != "All":
         df = df[df["type"] == selected_type]
         
+    df = df[df["attaque"] >= min_attack]
     df = df.sort_values("total", ascending=False)
     
     st.metric("Pokemon Count", len(df))
