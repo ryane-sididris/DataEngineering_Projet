@@ -1,62 +1,68 @@
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
 import pymongo
 import time
 
-client = pymongo.MongoClient("mongodb://127.0.0.1:27017/")
-db = client["pokedex_db"]
-collection = db["pokemons"]
-
 def run_scraper():
-    print("Starting Scraper...")
-    
     options = Options()
+    options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_experimental_option("detach", True)
 
     driver = webdriver.Chrome(options=options)
     
     try:
         driver.get("https://pokemondb.net/pokedex/all")
-        time.sleep(2)
-
-        data = []
+        time.sleep(2) 
+        
         rows = driver.find_elements(By.CSS_SELECTOR, "table#pokedex tbody tr")
         
-        for row in rows[:151]: # Gen 1 only
-            try:
-                cols = row.find_elements(By.TAG_NAME, "td")
-                
-                name = cols[1].find_element(By.CSS_SELECTOR, "a.ent-name").text
-                slug = name.lower().replace(" ", "-").replace(".", "").replace("'", "").replace("♀", "-f").replace("♂", "-m")
-                
-                types = [t.text for t in cols[2].find_elements(By.CSS_SELECTOR, "a")]
-                
-                data.append({
-                    "nom": name,
-                    "type": types[0],
-                    "total": int(cols[3].text),
-                    "hp": int(cols[4].text),
-                    "attaque": int(cols[5].text),
-                    "defense": int(cols[6].text),
-                    "vitesse": int(cols[9].text),
-                    "image": f"https://img.pokemondb.net/artwork/{slug}.jpg"
-                })
-            except:
-                continue
+        data = []
+        for row in rows:
+            cols = row.find_elements(By.TAG_NAME, "td")
+            
+            gray_text = row.find_elements(By.CSS_SELECTOR, ".text-muted")
+            if gray_text:
+                name = gray_text[0].text
+            else:
+                name = row.find_elements(By.CSS_SELECTOR, ".ent-name")[0].text
+            
+            icon = row.find_elements(By.CSS_SELECTOR, ".img-fixed")
+            if icon:
+                icon_src = icon[0].get_attribute("data-src")
+                if not icon_src:
+                    icon_src = icon[0].get_attribute("src")
+                slug = icon_src.split("/")[-1].replace(".png", "")
+                img_url = f"https://img.pokemondb.net/artwork/large/{slug}.jpg"
+            else:
+                img_url = "https://img.pokemondb.net/artwork/large/bulbasaur.jpg"
 
+            pokemon = {
+                "id": cols[0].text,
+                "nom": name,
+                "type": cols[2].text.split("\n")[0],
+                "total": int(cols[3].text),
+                "hp": int(cols[4].text),
+                "attaque": int(cols[5].text),
+                "defense": int(cols[6].text),
+                "image": img_url
+            }
+            data.append(pokemon)
+
+        client = pymongo.MongoClient("mongodb://127.0.0.1:27017/")
+        db = client["pokedex_db"]
+        collection = db["pokemons"]
+        
+        collection.delete_many({})
         if data:
-            collection.delete_many({}) 
             collection.insert_many(data)
-            print(f"Success: {len(data)} pokemon added.")
         
         return len(data)
 
-    except Exception as e:
-        print(f"Error: {e}")
+    except Exception:
         return 0
+    
     finally:
         driver.quit()
 
